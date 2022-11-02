@@ -3,7 +3,7 @@ import os
 import torch
 from torch import nn
 import numpy as np
-from torch.utils.data import DataLoader, Subset, IterableDataset
+from torch.utils.data import DataLoader, Subset, IterableDataset, ConcatDataset
 from torchvision.datasets import EMNIST
 from functools import partial
 import argparse
@@ -31,8 +31,12 @@ class TargetTransform:
 def make_dataset_main(train, size, transform=InputTransform):
     return Subset(EMNIST('/tmp/datasets', split="mnist", train=train, download=True, transform=transform(), target_transform=TargetTransform()), range(size))
 
-def make_dataset_aux(train, size, transform=InputTransform):
-    return Subset(EMNIST('/tmp/datasets', split="letters", train=train, download=True, transform=transform(), target_transform=TargetTransform()), range(size))
+def make_dataset_both(train, size, transform=InputTransform):
+    if train:
+        aux = Subset(EMNIST('/tmp/datasets', split="letters", train=train, download=True, transform=transform(), target_transform=TargetTransform()), range(100_000))
+        return ConcatDataset(make_dataset_main(True, size_main, transform), aux)
+    else:
+        return make_dataset_main(False, size)
 
 class InfiniteData(IterableDataset):
     def __init__(self, ds):
@@ -200,7 +204,7 @@ if __name__ == '__main__':
         os.makedirs(f'{args.root}/experiment09', exist_ok=True)
         for i, m in enumerate([[32, 32, 16], [64, 64, 32], [256]*4, [512]*4, [1024]*5, [2048]*5]):
             for d in [500, 1000, 2000, 5000, 10000, 20000]:
-                results_steps, results_train, results_test = experiment(FeedforwardNet(256, m), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None)
+                results_steps, results_train, results_test = experiment(FeedforwardNet(256, m), total_steps=500000, train_set_size=d, eval_set_size=10000, eval_every=None)
                 np.savez(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
 

@@ -15,7 +15,14 @@ class InputTransform:
 class InputTransformAugmentSquares(InputTransform):
     def __call__(self, sample):
         base = super().__call__(sample)
-        return torch.cat([base, base], 0)
+        return torch.cat([base, base**2], 0)
+
+class InputTransformAugmentPairwiseProducts(InputTransform):
+    def __call__(self, sample):
+        base = super().__call__(sample)
+        aug = base[:,None]
+        aug = (aug * aug.T)[np.triu_indices(base.shape[0])]
+        return torch.cat([base, aug], 0)
 
 class TargetTransform:
     def __call__(self, sample):
@@ -40,6 +47,29 @@ class LinearModel(nn.Module):
 
     def forward(self, x):
         return self.l1(x).squeeze()
+
+class FeedforwardNet(torch.nn.Module):
+    def __init__(self, input_size, layers, nonlin=nn.ReLU(inplace=True)):
+        super().__init__()
+        self.nonlin = nonlin
+        layer_widths = [input_size] + layers + [1]
+        self.hidden_layers = torch.nn.ModuleList([
+            nn.Linear(in_d, out_d)
+            for in_d, out_d in zip(layer_widths[:-2], layer_widths[1:-1])])
+        self.final_layer = nn.Linear(layer_widths[-2], layer_widths[-1])
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        for layer in self.hidden_layers:
+            nn.init.kaiming_normal_(layer.weight, a=1, mode='fan_in')
+        nn.init.zeros_(self.final_layer.weight)
+
+    def forward(self, x):
+        x = x.reshape([x.shape[0], -1])
+        for i, layer in enumerate(self.hidden_layers):
+            x = self.nonlin(layer(x))
+        x = self.final_layer(x)
+        return x.squeeze()
 
 def training_step(model, batch, opt):
     xs, ys = batch
@@ -140,6 +170,39 @@ if __name__ == '__main__':
             results_steps, results_train, results_test = experiment(LinearModel(256*2), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None,
                                                                     make_dataset=partial(make_dataset_main, transform=InputTransformAugmentSquares))
             np.savez(f'{args.root}/experiment05/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
+
+    ## Linear regression on various dataset sizes, augmenting input features with all pairwise products
+    elif args.experiment == 6:
+        os.makedirs(f'{args.root}/experiment06', exist_ok=True)
+        for d in [500, 1000, 2000, 5000, 10000, 20000]:
+            results_steps, results_train, results_test = experiment(LinearModel(256 + 257*256//2), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None,
+                                                                    make_dataset=partial(make_dataset_main, transform=InputTransformAugmentPairwiseProducts), lr=1e-5)
+            np.savez(f'{args.root}/experiment06/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
+
+    ## Deep learning on small data
+    if args.experiment == 7:
+        os.makedirs(f'{args.root}/experiment07', exist_ok=True)
+        results_steps, results_train, results_test = experiment(LinearModel(256 + 257*256//2), total_steps=200000, train_set_size=1000, eval_every=5000,
+                                                                make_dataset=partial(make_dataset_main, transform=InputTransformAugmentPairwiseProducts), lr=1e-5)
+        np.savez(f'{args.root}/experiment07/results_lr.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
+        results_steps, results_train, results_test = experiment(FeedforwardNet(256, [32, 32, 16]), total_steps=200000, train_set_size=1000, eval_every=5000)
+        np.savez(f'{args.root}/experiment07/results_dl.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
+
+    ## Deep learning on various dataset sizes
+    elif args.experiment == 8:
+        os.makedirs(f'{args.root}/experiment08', exist_ok=True)
+        for d in [500, 1000, 2000, 5000, 10000, 20000]:
+            results_steps, results_train, results_test = experiment(FeedforwardNet(256, [32, 32, 16]), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None)
+            np.savez(f'{args.root}/experiment08/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
+
+    ## Deep learning on various model/dataset sizes
+    elif args.experiment == 9:
+        os.makedirs(f'{args.root}/experiment09', exist_ok=True)
+        for i, m in enumerate([[32, 32, 16], [64, 64, 32], [256]*4, [512]*4, [1024]*5, [2048]*5]):
+            for d in [500, 1000, 2000, 5000, 10000, 20000]:
+                results_steps, results_train, results_test = experiment(FeedforwardNet(256, m), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None)
+                np.savez(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
+
 
     else:
         raise Exception(f"No experiment with ID {args.experiment}")

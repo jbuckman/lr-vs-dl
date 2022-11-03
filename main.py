@@ -176,7 +176,7 @@ if __name__ == '__main__':
     ## Linear regression warm-up, but with L2 loss
     elif args.experiment == 2:
         os.makedirs(f'{args.root}/experiment02', exist_ok=True)
-        for wd in [.1, 1., 10.]:
+        for wd in [.05, .1, .2]:
             print(f"Running {wd}")
             results_steps, results_train, results_test = experiment(LinearModel(), wd=wd, total_steps=10000, train_set_size=1000, eval_every=500)
             np.savez(f'{args.root}/experiment02/results{wd:06.2f}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))

@@ -197,7 +197,7 @@ if __name__ == '__main__':
                 results = np.load(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz')
                 r2_train.append(results['train'][-1])
                 r2_test.append(results['test'][-1])
-            p.line(dataset_sizes, r2_train, line_width=1, line_color=colors[i], line_dash='dashed')
+            # p.line(dataset_sizes, r2_train, line_width=1, line_color=colors[i], line_dash='dashed')
             p.line(dataset_sizes, r2_test, legend_label=m, line_width=1, line_color=colors[i])
         p.legend.click_policy = "hide"
         save(p)
@@ -215,7 +215,7 @@ if __name__ == '__main__':
                 results = np.load(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz')
                 r2_train.append(results['train'][-1])
                 r2_test.append(results['test'][-1])
-            p.line(model_pcs, r2_train, line_width=1, line_color=colors[j], line_dash='dashed')
+            # p.line(model_pcs, r2_train, line_width=1, line_color=colors[j], line_dash='dashed')
             p.line(model_pcs, r2_test, legend_label=f'D={d}', line_width=1, line_color=colors[j])
         p.legend.click_policy = "hide"
         save(p)
@@ -233,7 +233,7 @@ if __name__ == '__main__':
                 results = np.load(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz')
                 r2_train.append(results['train'][-1])
                 r2_test.append(results['test'][-1])
-            p.line(model_pcs, r2_train, line_width=1, line_color=colors[j], line_dash='dashed')
+            # p.line(model_pcs, r2_train, line_width=1, line_color=colors[j], line_dash='dashed')
             p.line(model_pcs, r2_test, legend_label=f'D={d}', line_width=1, line_color=colors[j])
         p.legend.click_policy = "hide"
         save(p)

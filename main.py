@@ -31,10 +31,10 @@ class TargetTransform:
 def make_dataset_main(train, size, transform=InputTransform):
     return Subset(EMNIST('/tmp/datasets', split="mnist", train=train, download=True, transform=transform(), target_transform=TargetTransform()), range(size))
 
-def make_dataset_both(train, size, transform=InputTransform):
+def make_dataset_aux(train, size, transform=InputTransform):
     if train:
-        aux = Subset(EMNIST('/tmp/datasets', split="letters", train=train, download=True, transform=transform(), target_transform=TargetTransform()), range(100_000))
-        return ConcatDataset(make_dataset_main(True, size_main, transform), aux)
+        aux = Subset(EMNIST('/tmp/datasets', split="letters", train=True, download=True, transform=transform(), target_transform=TargetTransform()), range(100_000))
+        return ConcatDataset([make_dataset_main(True, size, transform), aux])
     else:
         return make_dataset_main(False, size)
 
@@ -42,7 +42,9 @@ class InfiniteData(IterableDataset):
     def __init__(self, ds):
         self.ds = ds
     def __iter__(self):
-        yield self.ds[np.random.randint(0, len(self.ds))]
+        return self
+    def __next__(self):
+        return self.ds[np.random.randint(0, len(self.ds))]
 
 class LinearModel(nn.Module):
     def __init__(self, input_size=256):
@@ -94,15 +96,15 @@ def evaluate(model, dataset, ss_tot):
         ss_res += ((preds - ys)**2.).sum()
     return (1 - ss_res/ss_tot).item()
 
-def experiment(model, make_dataset=make_dataset_main, lr=3e-4, wd=0., batch_size=256, total_steps=100000,
-               train_set_size=1000, eval_set_size=1000, eval_every=None, eval_train=True):
+def experiment(model, make_dataset=make_dataset_main, lr=1e-3, wd=0., batch_size=256, total_steps=100000,
+               train_set_size=1000, eval_set_size=10000, eval_every=None, eval_train=True):
     if torch.cuda.is_available(): model.to('cuda')
 
     train_ds = make_dataset(train=True, size=train_set_size)
     if eval_train: eval_train_ds = make_dataset(train=True, size=min(eval_set_size, train_set_size))
     eval_test_ds = make_dataset(train=False, size=eval_set_size)
 
-    train_loader = DataLoader(InfiniteData(train_ds), batch_size=batch_size, drop_last=False, pin_memory=torch.cuda.is_available())
+    train_loader = DataLoader(InfiniteData(train_ds), batch_size=batch_size, num_workers=2, pin_memory=torch.cuda.is_available())
     if eval_train: eval_train_loader = DataLoader(eval_train_ds, batch_size=batch_size*2, drop_last=False, pin_memory=torch.cuda.is_available())
     eval_test_loader = DataLoader(eval_test_ds, batch_size=batch_size*2, drop_last=False, pin_memory=torch.cuda.is_available())
 
@@ -117,19 +119,18 @@ def experiment(model, make_dataset=make_dataset_main, lr=3e-4, wd=0., batch_size
     results_steps = []
     if eval_train: results_train = []
     results_test = []
-    while step < total_steps:
-        for batch in train_loader:
-            training_step(model, batch, opt)
-            step += 1
-            if step % (total_steps // 100) == 0:
-                print(f"{step}/{total_steps} ({step / total_steps:.0%})")
-            if step == total_steps or (eval_every is not None and step % eval_every == 0):
-                results_steps.append(step)
-                if eval_train: results_train.append(evaluate(model, eval_train_loader, train_ss))
-                results_test.append(evaluate(model, eval_test_loader, test_ss))
-                print(f"Step {step: 8}   |   In-sample R^2 {results_train[-1] if eval_train else 0.:.2f}   |   Out-of-sample R^2 {results_test[-1]:.2f}", flush=True)
-            if step == total_steps:
-                break
+    for batch in train_loader:
+        training_step(model, batch, opt)
+        step += 1
+        if step % (total_steps // 100) == 0:
+            print(f"{step}/{total_steps} ({step / total_steps:.0%})")
+        if step == total_steps or (eval_every is not None and step % eval_every == 0):
+            results_steps.append(step)
+            if eval_train: results_train.append(evaluate(model, eval_train_loader, train_ss))
+            results_test.append(evaluate(model, eval_test_loader, test_ss))
+            print(f"Step {step: 8}   |   In-sample R^2 {results_train[-1] if eval_train else 0.:.2f}   |   Out-of-sample R^2 {results_test[-1]:.2f}", flush=True)
+        if step == total_steps:
+            break
     if eval_train:
         return results_steps, results_train, results_test
     else:
@@ -144,69 +145,82 @@ if __name__ == '__main__':
     ## Linear regression warm-up
     if args.experiment == 1:
         os.makedirs(f'{args.root}/experiment01', exist_ok=True)
-        results_steps, results_train, results_test = experiment(LinearModel(), total_steps=200000, train_set_size=1000, eval_every=5000)
+        results_steps, results_train, results_test = experiment(LinearModel(), total_steps=10000, train_set_size=1000, eval_every=500)
         np.savez(f'{args.root}/experiment01/results.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Linear regression warm-up, but with L2 loss
     elif args.experiment == 2:
         os.makedirs(f'{args.root}/experiment02', exist_ok=True)
-        for wd in [.01, .1, 1., 10., 100.]:
-            results_steps, results_train, results_test = experiment(LinearModel(), wd=wd, total_steps=200000, train_set_size=1000, eval_every=5000)
+        for wd in [.1, 1., 10.]:
+            print(f"Running {wd}")
+            results_steps, results_train, results_test = experiment(LinearModel(), wd=wd, total_steps=10000, train_set_size=1000, eval_every=500)
             np.savez(f'{args.root}/experiment02/results{wd:06.2f}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Linear regression on bigger data
     elif args.experiment == 3:
         os.makedirs(f'{args.root}/experiment03', exist_ok=True)
-        results_steps, results_train, results_test = experiment(LinearModel(), total_steps=200000, train_set_size=10000, eval_every=5000)
+        results_steps, results_train, results_test = experiment(LinearModel(), total_steps=10000, train_set_size=10000, eval_every=500)
         np.savez(f'{args.root}/experiment03/results.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Linear regression on various dataset sizes
     elif args.experiment == 4:
         os.makedirs(f'{args.root}/experiment04', exist_ok=True)
-        for d in [500, 1000, 2000, 5000, 10000, 20000]:
-            results_steps, results_train, results_test = experiment(LinearModel(), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None)
+        for d in [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]:
+            print(f"Running {d}")
+            results_steps, results_train, results_test = experiment(LinearModel(), total_steps=10000, train_set_size=d, eval_every=None)
             np.savez(f'{args.root}/experiment04/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Linear regression on various dataset sizes, augmenting input features with their squares
     elif args.experiment == 5:
         os.makedirs(f'{args.root}/experiment05', exist_ok=True)
-        for d in [500, 1000, 2000, 5000, 10000, 20000]:
-            results_steps, results_train, results_test = experiment(LinearModel(256*2), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None,
+        for d in [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]:
+            print(f"Running {d}")
+            results_steps, results_train, results_test = experiment(LinearModel(256*2), total_steps=10000, train_set_size=d, eval_every=None,
                                                                     make_dataset=partial(make_dataset_main, transform=InputTransformAugmentSquares))
             np.savez(f'{args.root}/experiment05/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Linear regression on various dataset sizes, augmenting input features with all pairwise products
     elif args.experiment == 6:
         os.makedirs(f'{args.root}/experiment06', exist_ok=True)
-        for d in [500, 1000, 2000, 5000, 10000, 20000]:
-            results_steps, results_train, results_test = experiment(LinearModel(256 + 257*256//2), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None,
-                                                                    make_dataset=partial(make_dataset_main, transform=InputTransformAugmentPairwiseProducts), lr=1e-5)
+        for d in [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]:
+            print(f"Running {d}")
+            results_steps, results_train, results_test = experiment(LinearModel(256 + 257*256//2), total_steps=10000, train_set_size=d, eval_every=None,
+                                                                    make_dataset=partial(make_dataset_main, transform=InputTransformAugmentPairwiseProducts))
             np.savez(f'{args.root}/experiment06/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Deep learning on small data
-    if args.experiment == 7:
+    elif args.experiment == 7:
         os.makedirs(f'{args.root}/experiment07', exist_ok=True)
-        results_steps, results_train, results_test = experiment(LinearModel(256 + 257*256//2), total_steps=200000, train_set_size=1000, eval_every=5000,
-                                                                make_dataset=partial(make_dataset_main, transform=InputTransformAugmentPairwiseProducts), lr=1e-5)
+        results_steps, results_train, results_test = experiment(LinearModel(256 + 257*256//2), total_steps=10000, train_set_size=1000, eval_every=500,
+                                                                make_dataset=partial(make_dataset_main, transform=InputTransformAugmentPairwiseProducts))
         np.savez(f'{args.root}/experiment07/results_lr.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
-        results_steps, results_train, results_test = experiment(FeedforwardNet(256, [32, 32, 16]), total_steps=200000, train_set_size=1000, eval_every=5000)
+        results_steps, results_train, results_test = experiment(FeedforwardNet(256, [32, 32, 16]), total_steps=10000, train_set_size=1000, eval_every=500)
         np.savez(f'{args.root}/experiment07/results_dl.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Deep learning on various dataset sizes
     elif args.experiment == 8:
         os.makedirs(f'{args.root}/experiment08', exist_ok=True)
-        for d in [500, 1000, 2000, 5000, 10000, 20000]:
-            results_steps, results_train, results_test = experiment(FeedforwardNet(256, [32, 32, 16]), total_steps=200000, train_set_size=d, eval_set_size=10000, eval_every=None)
+        for d in [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]:
+            print(f"Running {d}")
+            results_steps, results_train, results_test = experiment(FeedforwardNet(256, [32, 32, 16]), total_steps=10000, train_set_size=d, eval_every=None)
             np.savez(f'{args.root}/experiment08/results{d:05}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     ## Deep learning on various model/dataset sizes
     elif args.experiment == 9:
         os.makedirs(f'{args.root}/experiment09', exist_ok=True)
         for i, m in enumerate([[32, 32, 16], [64, 64, 32], [256]*4, [512]*4, [1024]*5, [2048]*5]):
-            for d in [500, 1000, 2000, 5000, 10000, 20000]:
-                results_steps, results_train, results_test = experiment(FeedforwardNet(256, m), total_steps=500000, train_set_size=d, eval_set_size=10000, eval_every=None)
+            for d in [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]:
+                print(f"Running {m} {d}")
+                results_steps, results_train, results_test = experiment(FeedforwardNet(256, m), total_steps=10000, train_set_size=d, eval_every=None)
                 np.savez(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
+    ## Deep learning on small data, plus an auxilliary task
+    elif args.experiment == 10:
+        os.makedirs(f'{args.root}/experiment10', exist_ok=True)
+        results_steps, results_train, results_test = experiment(FeedforwardNet(256, [128, 128, 64]), total_steps=10000, train_set_size=1000, eval_every=500, make_dataset=make_dataset_aux)
+        np.savez(f'{args.root}/experiment10/results.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     else:
         raise Exception(f"No experiment with ID {args.experiment}")
+
+    ## for i in 1 2 3 4 5 6 7 8 9 10; do echo "experiment $i"; python main.py $i; done

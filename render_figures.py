@@ -15,8 +15,10 @@ if __name__ == '__main__':
         output_file(f'{args.root}/experiment01/plot.html')
         p.add_layout(Legend(), 'right')
         results = np.load(f'{args.root}/experiment01/results.npz')
-        p.line(results['steps'], results['train'], legend_label="In-sample", line_width=2, line_color='black', line_dash='dashed')
-        p.line(results['steps'], results['test'], legend_label="Out-of-sample", line_width=2, line_color='black')
+        for i in range(results['steps'].shape[0]): p.line(results['steps'][i], results['train'][i], line_width=.25, line_color='black', line_alpha=0.5, line_dash='dashed')
+        p.line(results['steps'][0], results['train'].mean(0), legend_label="In-sample", line_width=2, line_color='black', line_dash='dashed')
+        for i in range(results['steps'].shape[0]): p.line(results['steps'][i], results['test'][i], line_width=.25, line_color='black', line_alpha=0.5)
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Out-of-sample", line_width=2, line_color='black')
         p.legend.click_policy = "hide"
         save(p)
 

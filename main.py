@@ -29,11 +29,17 @@ class TargetTransform:
         return torch.tensor(sample, dtype=torch.float32)
 
 def make_dataset_main(train, size, transform=InputTransform):
-    return Subset(EMNIST('/tmp/datasets', split="mnist", train=train, download=True, transform=transform(), target_transform=TargetTransform()), range(size))
+    dataset = EMNIST('/tmp/datasets', split="mnist", train=train, download=True, transform=transform(), target_transform=TargetTransform())
+    idx = np.arange(len(dataset))
+    np.random.shuffle(idx)
+    return Subset(dataset, idx[:size])
 
 def make_dataset_aux(train, size, transform=InputTransform):
     if train:
-        aux = Subset(EMNIST('/tmp/datasets', split="letters", train=True, download=True, transform=transform(), target_transform=TargetTransform()), range(100_000))
+        dataset = EMNIST('/tmp/datasets', split="letters", train=True, download=True, transform=transform(), target_transform=TargetTransform())
+        idx = np.arange(len(dataset))
+        np.random.shuffle(idx)
+        aux = Subset(dataset, idx[:100_000])
         return ConcatDataset([make_dataset_main(True, size, transform), aux])
     else:
         return make_dataset_main(False, size)
@@ -45,6 +51,21 @@ class InfiniteData(IterableDataset):
         return self
     def __next__(self):
         return self.ds[np.random.randint(0, len(self.ds))]
+
+class FiniteData(IterableDataset):
+    def __init__(self, ds, amount):
+        self.ds = ds
+        self.amount = min(len(ds), amount)
+    def __len__(self):
+        return self.amount
+    def __iter__(self):
+        self.i = 0
+        return self
+    def __next__(self):
+        if self.i == self.amount: raise StopIteration
+        out = self.ds[self.i]
+        self.i += 1
+        return out
 
 class LinearModel(nn.Module):
     def __init__(self, input_size=256):
@@ -96,45 +117,49 @@ def evaluate(model, dataset, ss_tot):
         ss_res += ((preds - ys)**2.).sum()
     return (1 - ss_res/ss_tot).item()
 
-def experiment(model, make_dataset=make_dataset_main, lr=1e-3, wd=0., batch_size=256, total_steps=100000,
-               train_set_size=1000, eval_set_size=10000, eval_every=None, eval_train=True):
+def experiment(model, trials=5, make_dataset=make_dataset_main, lr=1e-3, wd=0., batch_size=256, total_steps=100000,
+               train_set_size=1000, eval_set_size=10000, eval_every=None):
     if torch.cuda.is_available(): model.to('cuda')
 
-    train_ds = make_dataset(train=True, size=train_set_size)
-    if eval_train: eval_train_ds = make_dataset(train=True, size=min(eval_set_size, train_set_size))
-    eval_test_ds = make_dataset(train=False, size=eval_set_size)
+    all_results_steps = []
+    all_results_train = []
+    all_results_test = []
+    for trial in range(trials):
+        print(f"Trial {trial+1}")
+        train_ds = make_dataset(train=True, size=train_set_size)
+        test_ds = make_dataset(train=False, size=eval_set_size)
 
-    train_loader = DataLoader(InfiniteData(train_ds), batch_size=batch_size, num_workers=2, pin_memory=torch.cuda.is_available())
-    if eval_train: eval_train_loader = DataLoader(eval_train_ds, batch_size=batch_size*2, drop_last=False, pin_memory=torch.cuda.is_available())
-    eval_test_loader = DataLoader(eval_test_ds, batch_size=batch_size*2, drop_last=False, pin_memory=torch.cuda.is_available())
+        train_loader = DataLoader(InfiniteData(train_ds), batch_size=batch_size, num_workers=2, pin_memory=torch.cuda.is_available())
+        eval_train_ds = FiniteData(train_ds, eval_set_size)
+        eval_train_loader = DataLoader(eval_train_ds, drop_last=False, batch_size=batch_size*2, pin_memory=torch.cuda.is_available())
+        eval_test_loader = DataLoader(FiniteData(test_ds, eval_set_size), batch_size=batch_size*2, drop_last=False, pin_memory=torch.cuda.is_available())
 
-    if eval_train:
         train_mean = sum([t for _, t in eval_train_ds])/len(eval_train_ds)
         train_ss = sum([(t - train_mean)**2 for _, t in eval_train_ds])
-    test_mean = sum([t for _, t in eval_test_ds])/len(eval_test_ds)
-    test_ss = sum([(t - test_mean)**2 for _, t in eval_test_ds])
+        test_mean = sum([t for _, t in test_ds])/len(test_ds)
+        test_ss = sum([(t - test_mean)**2 for _, t in test_ds])
 
-    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-    step = 0
-    results_steps = []
-    if eval_train: results_train = []
-    results_test = []
-    for batch in train_loader:
-        training_step(model, batch, opt)
-        step += 1
-        if step % (total_steps // 100) == 0:
-            print(f"{step}/{total_steps} ({step / total_steps:.0%})")
-        if step == total_steps or (eval_every is not None and step % eval_every == 0):
-            results_steps.append(step)
-            if eval_train: results_train.append(evaluate(model, eval_train_loader, train_ss))
-            results_test.append(evaluate(model, eval_test_loader, test_ss))
-            print(f"Step {step: 8}   |   In-sample R^2 {results_train[-1] if eval_train else 0.:.2f}   |   Out-of-sample R^2 {results_test[-1]:.2f}", flush=True)
-        if step == total_steps:
-            break
-    if eval_train:
-        return results_steps, results_train, results_test
-    else:
-        return results_steps, results_test
+        opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+        step = 0
+        results_steps = []
+        results_train = []
+        results_test = []
+        for batch in train_loader:
+            training_step(model, batch, opt)
+            step += 1
+            if step % (total_steps // 100) == 0:
+                print(f"{step}/{total_steps} ({step / total_steps:.0%})")
+            if step == total_steps or (eval_every is not None and step % eval_every == 0):
+                results_steps.append(step)
+                results_train.append(evaluate(model, eval_train_loader, train_ss))
+                results_test.append(evaluate(model, eval_test_loader, test_ss))
+                print(f"Step {step: 8}   |   In-sample R^2 {results_train[-1]:.2f}   |   Out-of-sample R^2 {results_test[-1]:.2f}", flush=True)
+            if step == total_steps:
+                break
+        all_results_steps.append(results_steps)
+        all_results_train.append(results_train)
+        all_results_test.append(results_test)
+    return all_results_steps, all_results_train, all_results_test
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -18,7 +18,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     ## Linear regression warm-up
-    if os.path.exists(f'{args.root}/experiment01'):
+    try:
         p = figure(title="Linear regression, D=1000", x_axis_label='Training steps', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment01/plot.html')
         p.add_layout(Legend(), 'left')
@@ -29,9 +29,10 @@ if __name__ == '__main__':
         p.line(results['steps'][0], results['test'].mean(0), legend_label="Out-of-sample", line_width=3, line_color='#129490')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment01, skipping...")
 
     ## Linear regression warm-up, but with L2 loss
-    if os.path.exists(f'{args.root}/experiment02'):
+    try:
         p = figure(title="Linear regression, D=1000", x_axis_label='Training steps', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment02/plot.html')
         p.add_layout(Legend(), 'left')
@@ -49,9 +50,10 @@ if __name__ == '__main__':
             p.line(results['steps'][0], results['test'].mean(0), legend_label=f"L2={wd}", line_width=2, line_color=colors[i])
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment02, skipping...")
 
     ## Linear regression on bigger data
-    if os.path.exists(f'{args.root}/experiment03'):
+    try:
         p = figure(title="Linear regression",  x_axis_label='Training steps', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment03/plot.html')
         p.add_layout(Legend(), 'left')
@@ -67,13 +69,14 @@ if __name__ == '__main__':
         p.line(results['steps'][0], results['test'].mean(0), legend_label="D=10000", line_width=3, line_color='#065143')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment03, skipping...")
 
     ## Linear regression on various dataset sizes
-    if os.path.exists(f'{args.root}/experiment04'):
+    try:
         p = figure(title="Linear regression", x_axis_label='Dataset size', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment04/plot.html')
         p.add_layout(Legend(), 'left')
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         r2_train = []; r2_test = []
         for d in dataset_sizes:
             results = np.load(f'{args.root}/experiment04/results{d:05}.npz')
@@ -83,13 +86,14 @@ if __name__ == '__main__':
         p.line(dataset_sizes, r2_test, legend_label=f"Out-of-sample", line_width=2, line_color='black')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment04, skipping...")
 
     ## Linear regression on various dataset sizes, augmenting input features with their squares
-    if os.path.exists(f'{args.root}/experiment05'):
+    try:
         p = figure(title="Linear regression", x_axis_label='Dataset size', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment05/plot.html')
         p.add_layout(Legend(), 'left')
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         r2_train = []; r2_test = []
         for d in dataset_sizes:
             results = np.load(f'{args.root}/experiment04/results{d:05}.npz')
@@ -106,13 +110,14 @@ if __name__ == '__main__':
         p.line(dataset_sizes, r2_test, legend_label=f"Square features", line_width=2, line_color='blue')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment05, skipping...")
 
     ## Linear regression on various dataset sizes, augmenting input features with all pairwise products
-    if os.path.exists(f'{args.root}/experiment06'):
+    try:
         p = figure(title="Linear regression", x_axis_label='Dataset size', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment06/plot.html')
         p.add_layout(Legend(), 'left')
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         r2_train = []; r2_test = []
         for d in dataset_sizes:
             results = np.load(f'{args.root}/experiment04/results{d:05}.npz')
@@ -136,15 +141,18 @@ if __name__ == '__main__':
         p.line(dataset_sizes, r2_test, legend_label=f"Pair-prod features", line_width=2, line_color='green')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment06, skipping...")
 
     ## Deep learning on small data
-    if os.path.exists(f'{args.root}/experiment07'):
+    try:
         p = figure(title="Linear vs nonlinear regression, D=1000", x_axis_label='Training steps', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment07/plot.html')
         p.add_layout(Legend(), 'left')
         results = np.load(f'{args.root}/experiment01/results.npz')
-        p.line(results['steps'], results['train'], line_width=2, line_color='black', line_dash='dashed')
-        p.line(results['steps'], results['test'], legend_label="Regular features", line_width=2, line_color='black')
+        stdevshade(p, results['steps'], results['train'], legend_label="In-sample", fill_color='#129490')
+        p.line(results['steps'][0], results['train'].mean(0), legend_label="In-sample", line_width=3, line_color='#129490', line_dash='dashed')
+        stdevshade(p, results['steps'], results['test'], legend_label="Out-of-sample", fill_color='#129490')
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Out-of-sample", line_width=3, line_color='#129490')
         results = np.load(f'{args.root}/experiment07/results_lr.npz')
         p.line(results['steps'], results['train'], line_width=2, line_color='green', line_dash='dashed')
         p.line(results['steps'], results['test'], legend_label="Pair-prod features", line_width=2, line_color='green')
@@ -153,13 +161,14 @@ if __name__ == '__main__':
         p.line(results['steps'], results['test'], legend_label="Nonlinear regression", line_width=2, line_color='purple')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment07, skipping...")
 
     ## Deep learning on various dataset sizes
-    if os.path.exists(f'{args.root}/experiment08'):
+    try:
         p = figure(title="Linear regression vs deep learning", x_axis_label='Dataset size', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment08/plot.html')
         p.add_layout(Legend(), 'left')
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         r2_train = []; r2_test = []
         for d in dataset_sizes:
             results = np.load(f'{args.root}/experiment04/results{d:05}.npz')
@@ -183,16 +192,17 @@ if __name__ == '__main__':
         p.line(dataset_sizes, r2_test, legend_label=f"Nonlinear regression", line_width=2, line_color='purple')
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment08, skipping...")
 
 
     ## Deep learning at various model sizes on various dataset sizes
-    if os.path.exists(f'{args.root}/experiment09'):
+    try:
         p = figure(title="Deep learning", x_axis_label='Dataset size', y_axis_label='R^2', height=300)
         output_file(f'{args.root}/experiment09/plot1.html')
         p.add_layout(Legend(), 'left')
         colors = ['#E138FF', '#A938EB', '#8B3DFA', '#5C38EB', '#3336FF', '#0A69FE']
         model_size_names = ['Small', 'Medium', 'Large']
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for i, m in enumerate(model_size_names):
             r2_train = []; r2_test = []
             for d in dataset_sizes:
@@ -208,7 +218,7 @@ if __name__ == '__main__':
         output_file(f'{args.root}/experiment09/plot2.html')
         p.add_layout(Legend(), 'left')
         model_size_names = ['Small', 'Medium', 'Large', 'Huge', 'Enormous', 'XXL']
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for i, m in enumerate(model_size_names):
             r2_train = []; r2_test = []
             for d in dataset_sizes:
@@ -226,7 +236,7 @@ if __name__ == '__main__':
         model_shapes = [[32, 32, 16], [64, 64, 32], [256]*4, [512]*4, [1024]*5]
         def ms_to_pc(ms): return sum(il*ol+ol for il, ol in zip([256]+ms, ms+[1]))
         model_pcs = [ms_to_pc(ms) for ms in model_shapes]
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for j, d in enumerate(dataset_sizes):
             r2_train = []; r2_test = []
             for i, m in enumerate(model_pcs):
@@ -244,7 +254,7 @@ if __name__ == '__main__':
         model_shapes = [[32, 32, 16], [64, 64, 32], [256]*4, [512]*4, [1024]*5, [2048]*5]
         def ms_to_pc(ms): return sum(il*ol+ol for il, ol in zip([256]+ms, ms+[1]))
         model_pcs = [ms_to_pc(ms) for ms in model_shapes]
-        dataset_sizes = [500, 1000, 2000, 5000, 10000, 20000]
+        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for j, d in enumerate(dataset_sizes):
             r2_train = []; r2_test = []
             for i, m in enumerate(model_pcs):
@@ -255,3 +265,4 @@ if __name__ == '__main__':
             p.line(model_pcs, r2_test, legend_label=f'D={d}', line_width=1, line_color=colors[j])
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for experiment09, skipping...")

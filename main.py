@@ -127,10 +127,10 @@ def experiment(model, trials=5, make_dataset=make_dataset_main, lr=1e-3, wd=0., 
     for trial in range(trials):
         print(f"Trial {trial+1}")
         train_ds = make_dataset(train=True, size=train_set_size)
+        eval_train_ds = FiniteData(train_ds, eval_set_size)
         test_ds = make_dataset(train=False, size=eval_set_size)
 
         train_loader = DataLoader(InfiniteData(train_ds), batch_size=batch_size, num_workers=2, pin_memory=torch.cuda.is_available())
-        eval_train_ds = FiniteData(train_ds, eval_set_size)
         eval_train_loader = DataLoader(eval_train_ds, drop_last=False, batch_size=batch_size*2, pin_memory=torch.cuda.is_available())
         eval_test_loader = DataLoader(FiniteData(test_ds, eval_set_size), batch_size=batch_size*2, drop_last=False, pin_memory=torch.cuda.is_available())
 
@@ -147,7 +147,7 @@ def experiment(model, trials=5, make_dataset=make_dataset_main, lr=1e-3, wd=0., 
         for batch in train_loader:
             training_step(model, batch, opt)
             step += 1
-            if step % (total_steps // 100) == 0:
+            if step % (total_steps // 10) == 0:
                 print(f"{step}/{total_steps} ({step / total_steps:.0%})")
             if step == total_steps or (eval_every is not None and step % eval_every == 0):
                 results_steps.append(step)

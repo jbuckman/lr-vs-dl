@@ -4,6 +4,14 @@ import numpy as np
 from bokeh.plotting import figure, show, output_file, save
 from bokeh.models import Legend
 
+def manyline(p, x, y, **kwargs):
+    for i in range(x.shape[0]): p.line(x[i], y[i], line_width=1, line_alpha=0.5, **kwargs)
+
+def stdevshade(p, x, y, **kwargs):
+    μ = y.mean(0)
+    σ = y.std(0) / np.sqrt(y.shape[0])
+    p.varea(x[0], μ-σ, μ+σ, fill_alpha=.2, **kwargs)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default='./results', help="root dir to save results")
@@ -15,10 +23,10 @@ if __name__ == '__main__':
         output_file(f'{args.root}/experiment01/plot.html')
         p.add_layout(Legend(), 'right')
         results = np.load(f'{args.root}/experiment01/results.npz')
-        for i in range(results['steps'].shape[0]): p.line(results['steps'][i], results['train'][i], line_width=.25, line_color='black', line_alpha=0.5, line_dash='dashed')
-        p.line(results['steps'][0], results['train'].mean(0), legend_label="In-sample", line_width=2, line_color='black', line_dash='dashed')
-        for i in range(results['steps'].shape[0]): p.line(results['steps'][i], results['test'][i], line_width=.25, line_color='black', line_alpha=0.5)
-        p.line(results['steps'][0], results['test'].mean(0), legend_label="Out-of-sample", line_width=2, line_color='black')
+        stdevshade(p, results['steps'], results['train'], fill_color='black')
+        p.line(results['steps'][0], results['train'].mean(0), legend_label="In-sample", line_width=3, line_color='black', line_dash='dashed')
+        stdevshade(p, results['steps'], results['test'], fill_color='black')
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Out-of-sample", line_width=3, line_color='black')
         p.legend.click_policy = "hide"
         save(p)
 
@@ -28,12 +36,16 @@ if __name__ == '__main__':
         output_file(f'{args.root}/experiment02/plot.html')
         p.add_layout(Legend(), 'right')
         results = np.load(f'{args.root}/experiment01/results.npz')
-        p.line(results['steps'], results['train'], line_width=2, line_color='black', line_dash='dashed')
-        p.line(results['steps'], results['test'], legend_label="Unregularized", line_width=2, line_color='black')
+        stdevshade(p, results['steps'], results['train'], fill_color='black')
+        p.line(results['steps'][0], results['train'].mean(0), line_width=2, line_color='black', line_dash='dashed')
+        stdevshade(p, results['steps'], results['test'], fill_color='black')
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Unregularized", line_width=2, line_color='black')
         colors = ['#308FFF', '#31B2E8', '#31E8C2']
         for i, wd in enumerate([.1, 1., 10.]):
             results = np.load(f'{args.root}/experiment02/results{wd:06.2f}.npz')
+            stdevshade(p, results['steps'], results['train'], fill_color=colors[i])
             p.line(results['steps'], results['train'], line_width=2, line_color=colors[i], line_dash='dashed')
+            stdevshade(p, results['steps'], results['test'], fill_color=colors[i])
             p.line(results['steps'], results['test'], legend_label=f"L2={wd}", line_width=2, line_color=colors[i])
         p.legend.click_policy = "hide"
         save(p)

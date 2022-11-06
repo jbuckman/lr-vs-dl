@@ -236,7 +236,7 @@ if __name__ == '__main__':
     ## Deep learning on various model/dataset sizes
     elif args.experiment == 9:
         os.makedirs(f'{args.root}/experiment09', exist_ok=True)
-        for i, m in enumerate([[32, 32, 16], [64, 64, 32], [128, 128, 64, 64], [256]*4, [512]*4, [1024]*5]):
+        for i, m in enumerate([[32, 32, 16], [64, 64, 32], [128, 128, 64, 64], [256]*4, [512]*4]):
             for d in [200, 500, 1000, 2000, 5000, 10000, 20000, 50000]:
                 print(f"Running {m} {d}")
                 results_steps, results_train, results_test = experiment(FeedforwardNet(256, m), total_steps=100000, train_set_size=d, eval_intermediate=False, trials=3)

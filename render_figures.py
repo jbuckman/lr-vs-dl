@@ -236,8 +236,7 @@ if __name__ == '__main__':
         output_file(f'{args.root}/plot09.html')
         p.add_layout(Legend(), 'left')
         colors = ['#E138FF', '#A938EB', '#8B3DFA', '#5C38EB', '#3336FF', '#0A69FE']
-        model_size_names = ['Small', 'Medium', 'Large']
-        # model_size_names = ['Small', 'Medium', 'Large', 'Huge', 'Enormous', 'XXL']
+        model_size_names = ['Small', 'Medium', 'Large', 'Huge', 'Enormous']
         dataset_sizes = [200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for i, m in enumerate(model_size_names):
             r2_train = []; r2_test = []
@@ -255,39 +254,45 @@ if __name__ == '__main__':
         save(p)
     except FileNotFoundError: print("File missing for plot09, skipping...")
 
+    ## Deep learning at various model sizes on various dataset sizes
     try:
-        p = figure(title="Deep learning", x_axis_label='Dataset size', y_axis_label='R^2', height=300, y_range=(-.05,1.05))
+        p = figure(title="Scaling model size in deep learning", x_axis_label='Dataset size', y_axis_label='1 - R^2', height=300, x_axis_type='log', y_axis_type='log')
         output_file(f'{args.root}/plot10.html')
         p.add_layout(Legend(), 'left')
-        model_size_names = ['Small', 'Medium', 'Large']
-        # model_size_names = ['Small', 'Medium', 'Large', 'Huge', 'Enormous', 'XXL']
-        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
+        colors = ['#E138FF', '#A938EB', '#8B3DFA', '#5C38EB', '#3336FF', '#0A69FE']
+        model_size_names = ['Small', 'Medium', 'Large', 'Huge', 'Enormous']
+        dataset_sizes = [200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for i, m in enumerate(model_size_names):
             r2_train = []; r2_test = []
             for d in dataset_sizes:
                 results = np.load(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz')
-                r2_train.append(results['train'][-1])
-                r2_test.append(results['test'][-1])
-            # p.line(dataset_sizes, r2_train, line_width=1, line_color=colors[i], line_dash='dashed')
-            p.line(dataset_sizes, r2_test, legend_label=m, line_width=1, line_color=colors[i])
+                r2_train.append(1 - results['train'][:, -1])
+                r2_test.append(1 - results['test'][:, -1])
+            r2_train = np.stack(r2_train, 1)
+            r2_test = np.stack(r2_test, 1)
+            stdevshade(p, dataset_sizes, r2_test, legend_label=m, fill_color=colors[i])
+            p.line(dataset_sizes, r2_test.mean(0), legend_label=m, line_width=2, line_color=colors[i])
         p.legend.click_policy = "hide"
         save(p)
+    except FileNotFoundError: print("File missing for plot10, skipping...")
 
-        p = figure(title="Deep learning", x_axis_label='Model size (parameter count)', y_axis_label='R^2', height=300, y_range=(-.05,1.05), x_axis_type='log')
+    try:
+        p = figure(title="Deep learning", x_axis_label='Model size (parameter count)', y_axis_label='1 - R^2', height=300, x_axis_type='log', y_axis_type='log')
         output_file(f'{args.root}/plot11.html')
         p.add_layout(Legend(), 'left')
-        model_shapes = [[32, 32, 16], [64, 64, 32], [256]*4, [512]*4, [1024]*5, [2048]*5]
+        colors = ['#B8E3FF', '#97C6E3', '#88B2CD', '#5E8CC2', '#3E6FA3', '#175485', '#003A68', '#001126']
+        dataset_sizes = [200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
+        model_shapes = [[32, 32, 16], [64, 64, 32], [128, 128, 64, 64], [256]*4, [512]*4]
         def ms_to_pc(ms): return sum(il*ol+ol for il, ol in zip([256]+ms, ms+[1]))
         model_pcs = [ms_to_pc(ms) for ms in model_shapes]
-        dataset_sizes = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000]
         for j, d in enumerate(dataset_sizes):
             r2_train = []; r2_test = []
             for i, m in enumerate(model_pcs):
                 results = np.load(f'{args.root}/experiment09/results_d{d:05}_m{i}.npz')
-                r2_train.append(results['train'][-1])
-                r2_test.append(results['test'][-1])
-            # p.line(model_pcs, r2_train, line_width=1, line_color=colors[j], line_dash='dashed')
-            p.line(model_pcs, r2_test, legend_label=f'D={d}', line_width=1, line_color=colors[j])
+                r2_test.append(1 - results['test'][:,-1])
+            r2_test = np.stack(r2_test, 1)
+            stdevshade(p, model_pcs, r2_test, legend_label=f'D={d}', fill_color=colors[j])
+            p.line(model_pcs, r2_test.mean(0), legend_label=f'D={d}', line_width=2, line_color=colors[j])
         p.legend.click_policy = "hide"
         save(p)
-    except FileNotFoundError: print("File missing for experiment09, skipping...")
+    except FileNotFoundError: print("File missing for plot11, skipping...")

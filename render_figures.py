@@ -19,35 +19,50 @@ if __name__ == '__main__':
 
     ## Linear regression warm-up
     try:
-        p = figure(title="Linear regression, D=1000", x_axis_label='Training steps', y_axis_label='R^2', height=300, y_range=(-.05,1.05))
+        p = figure(x_axis_label='Training steps', y_axis_label='R^2', width=500, height=300, x_range=(100, 1e4), y_range=(-.05,1.05), x_axis_type='log')
         output_file(f'{args.root}/plot01.html')
-        p.add_layout(Legend(), 'left')
+        # p.add_layout(Legend(), 'left')
         results = np.load(f'{args.root}/experiment01/results.npz')
         stdevshade(p, results['steps'][0], results['train'], legend_label="In-sample", fill_color='#129490')
         p.line(results['steps'][0], results['train'].mean(0), legend_label="In-sample", line_width=3, line_color='#129490', line_dash='dashed')
         stdevshade(p, results['steps'][0], results['test'], legend_label="Out-of-sample", fill_color='#129490')
         p.line(results['steps'][0], results['test'].mean(0), legend_label="Out-of-sample", line_width=3, line_color='#129490')
         p.legend.click_policy = "hide"
+        p.legend.location = 'top_left'
         save(p)
     except FileNotFoundError: print("File missing for experiment01, skipping...")
 
     ## Linear regression warm-up, but with L2 loss
     try:
-        p = figure(title="Linear regression, D=1000", x_axis_label='Training steps', y_axis_label='R^2', height=300, y_range=(-.05,1.05))
-        output_file(f'{args.root}/plot02.html')
-        p.add_layout(Legend(), 'left')
+        p = figure(x_axis_label='Training steps', y_axis_label='R^2', width=500, height=300, x_range=(100, 1e4), y_range=(-.05,1.05), x_axis_type='log')
+        output_file(f'{args.root}/plot02a.html')
+        # p.add_layout(Legend(), 'left')
         results = np.load(f'{args.root}/experiment01/results.npz')
-        stdevshade(p, results['steps'][0], results['train'], legend_label="Unregularized", fill_color='#129490')
+        # stdevshade(p, results['steps'][0], results['train'], legend_label="Unregularized", fill_color='#129490')
         p.line(results['steps'][0], results['train'].mean(0), legend_label="Unregularized", line_width=2, line_color='#129490', line_dash='dashed')
-        stdevshade(p, results['steps'][0], results['test'], legend_label="Unregularized", fill_color='#129490')
+        # stdevshade(p, results['steps'][0], results['test'], legend_label="Unregularized", fill_color='#129490')
         p.line(results['steps'][0], results['test'].mean(0), legend_label="Unregularized", line_width=2, line_color='#129490')
         colors = ['#E0A890', '#AE621B', '#704E2E']
         for i, wd in enumerate([.05, .1, .2]):
             results = np.load(f'{args.root}/experiment02/results{wd:06.2f}.npz')
-            stdevshade(p, results['steps'][0], results['train'], legend_label=f"L2={wd}", fill_color=colors[i])
+            # stdevshade(p, results['steps'][0], results['train'], legend_label=f"L2={wd}", fill_color=colors[i])
             p.line(results['steps'][0], results['train'].mean(0), legend_label=f"L2={wd}", line_width=2, line_color=colors[i], line_dash='dashed')
-            stdevshade(p, results['steps'][0], results['test'], legend_label=f"L2={wd}", fill_color=colors[i])
+            # stdevshade(p, results['steps'][0], results['test'], legend_label=f"L2={wd}", fill_color=colors[i])
             p.line(results['steps'][0], results['test'].mean(0), legend_label=f"L2={wd}", line_width=2, line_color=colors[i])
+        p.legend.click_policy = "hide"
+        p.legend.location = 'top_left'
+        save(p)
+
+        p = figure(x_axis_label='Regularization strength', y_axis_label='R^2', width=500, height=300, y_range=(-.05,1.05))
+        output_file(f'{args.root}/plot02b.html')
+        # p.add_layout(Legend(), 'left')
+        x = [0., .05, .1, .2]
+        sources = [np.load(f'{args.root}/experiment01/results.npz')] + [np.load(f'{args.root}/experiment02/results{wd:06.2f}.npz') for wd in x[1:]]
+        y_train = [src['train'].mean(0)[-1] for src in sources]
+        y_test = [src['test'].mean(0)[-1] for src in sources]
+        p.line(x, y_train, legend_label="In-sample", line_width=2, line_color='black', line_dash='dashed')
+        p.line(x, y_test, legend_label="Out-of-sample", line_width=2, line_color='black', line_dash='solid')
+        p.legend.location = 'top_left'
         p.legend.click_policy = "hide"
         save(p)
     except FileNotFoundError: print("File missing for experiment02, skipping...")
@@ -296,3 +311,27 @@ if __name__ == '__main__':
         p.legend.click_policy = "hide"
         save(p)
     except FileNotFoundError: print("File missing for plot11, skipping...")
+
+    ## Deep learning on small data, plus auxilliary data
+    try:
+        p = figure(title="Linear vs nonlinear regression, D=1000", x_axis_label='Training steps', y_axis_label='R^2', height=300, y_range=(-.05,1.05))
+        output_file(f'{args.root}/plot12.html')
+        p.add_layout(Legend(), 'left')
+        results = np.load(f'{args.root}/experiment01/results.npz')
+        stdevshade(p, results['steps'][0], results['train'], legend_label="Linear regression", fill_color='#129490')
+        p.line(results['steps'][0], results['train'].mean(0), legend_label="Linear regression", line_width=3, line_color='#129490', line_dash='dashed')
+        stdevshade(p, results['steps'][0], results['test'], legend_label="Linear regression", fill_color='#129490')
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Linear regression", line_width=3, line_color='#129490')
+        results = np.load(f'{args.root}/experiment07/results.npz')
+        stdevshade(p, results['steps'][0], results['train'], legend_label="Nonlinear regression", fill_color='#90BE6D')
+        p.line(results['steps'][0], results['train'].mean(0), legend_label="Nonlinear regression", line_width=3, line_color='#90BE6D', line_dash='dashed')
+        stdevshade(p, results['steps'][0], results['test'], legend_label="Nonlinear regression", fill_color='#90BE6D')
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Nonlinear regression", line_width=3, line_color='#90BE6D')
+        results = np.load(f'{args.root}/experiment10/results.npz')
+        stdevshade(p, results['steps'][0], results['train'], legend_label="Nonlinear regression + aux", fill_color='black')
+        p.line(results['steps'][0], results['train'].mean(0), legend_label="Nonlinear regression + aux", line_width=3, line_color='black', line_dash='dashed')
+        stdevshade(p, results['steps'][0], results['test'], legend_label="Nonlinear regression + aux", fill_color='black')
+        p.line(results['steps'][0], results['test'].mean(0), legend_label="Nonlinear regression + aux", line_width=3, line_color='black')
+        p.legend.click_policy = "hide"
+        save(p)
+    except FileNotFoundError: print("File missing for experiment07, skipping...")

@@ -11,7 +11,16 @@ import argparse
 
 class InputTransform:
     def __call__(self, sample):
-        return torch.tensor(np.array(sample)[6:22,6:22].reshape(-1).astype(float)/128. - 1., dtype=torch.float32)
+        # return torch.tensor(np.array(sample)[6:22,6:22].reshape(-1).astype(float)/128. - 1., dtype=torch.float32)
+        out = torch.tensor(np.array(sample)[6:22,6:22].reshape(-1).astype(float)/128. - 1., dtype=torch.float32)
+        out[0:5] = 2
+        return out
+class InputTransform2:
+    def __call__(self, sample):
+        # return torch.tensor(np.array(sample)[6:22,6:22].reshape(-1).astype(float)/128. - 1., dtype=torch.float32)
+        out = torch.tensor(np.array(sample)[6:22,6:22].reshape(-1).astype(float)/128. - 1., dtype=torch.float32)
+        out[0:5] = -2
+        return out
 
 class InputTransformAugmentSquares(InputTransform):
     def __call__(self, sample):
@@ -28,6 +37,9 @@ class InputTransformAugmentPairwiseProducts(InputTransform):
 class TargetTransform:
     def __call__(self, sample):
         return torch.tensor(sample, dtype=torch.float32)
+class TargetTransform2:
+    def __call__(self, sample):
+        return torch.tensor(sample + 10, dtype=torch.float32)
 
 def make_dataset_main(train, size, transform=InputTransform):
     dataset = EMNIST('/tmp/datasets', split="mnist", train=train, download=True, transform=transform(), target_transform=TargetTransform())
@@ -37,11 +49,14 @@ def make_dataset_main(train, size, transform=InputTransform):
 
 def make_dataset_aux(train, size, transform=InputTransform):
     if train:
-        dataset = EMNIST('/tmp/datasets', split="letters", train=True, download=True, transform=transform(), target_transform=TargetTransform())
-        idx = np.arange(len(dataset))
-        np.random.shuffle(idx)
-        aux = Subset(dataset, idx[:100_000])
-        return ConcatDataset([make_dataset_main(True, size, transform), aux])
+        dataset = EMNIST('/tmp/datasets', split="letters", train=True, download=True, transform=InputTransform2(), target_transform=TargetTransform2())
+        main = make_dataset_main(True, size, InputTransform)
+        # idx = np.arange(len(dataset))
+        # np.random.shuffle(idx)
+        # aux = Subset(dataset, idx[:100_000])
+        aux = dataset
+        return main
+        return ConcatDataset([main, aux])
     else:
         return make_dataset_main(False, size)
 
@@ -140,6 +155,7 @@ def experiment(model, trials=5, make_dataset=make_dataset_main, lr=1e-3, wd=0., 
         test_mean = sum([t for _, t in test_ds])/len(test_ds)
         test_ss = sum([(t - test_mean)**2 for _, t in test_ds])
 
+        model.reset_parameters()
         opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
         step = 0
         results_steps = []
@@ -245,7 +261,7 @@ if __name__ == '__main__':
     ## Deep learning on small data, plus an auxilliary task
     elif args.experiment == 10:
         os.makedirs(f'{args.root}/experiment10', exist_ok=True)
-        results_steps, results_train, results_test = experiment(FeedforwardNet(256, [128, 128, 64]), total_steps=10000, train_set_size=1000, eval_intermediate=True, make_dataset=make_dataset_aux)
+        results_steps, results_train, results_test = experiment(FeedforwardNet(256, [512]*4), total_steps=100000, train_set_size=10000, eval_intermediate=True, make_dataset=make_dataset_aux)
         np.savez(f'{args.root}/experiment10/results.npz', steps=np.array(results_steps), train=np.array(results_train), test=np.array(results_test))
 
     else:
